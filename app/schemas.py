@@ -7,14 +7,10 @@ class UserCreate(BaseModel):
     is_teacher: bool = False
 
 
-class LectureStatusResponse(BaseModel):
-    lecture_started: bool
-
-
 class UserAction(BaseModel):
     username: str
 
 
-class ReportResponse(BaseModel):
-    # This can be more complex based on your report's structure
-    report: dict
+class LectureAction(BaseModel):
+    title: str
+    username: str

@@ -2,7 +2,8 @@ from fastapi import FastAPI, Depends, HTTPException, status, File
 from sqlalchemy.orm import Session
 from database import SessionLocal, engine
 from models import Base, User, Lecture, Attendance
-from schemas import UserCreate, UserAction, LectureStatusResponse
+from schemas import UserCreate, UserAction, LectureAction
+from fastapi.responses import FileResponse
 from datetime import datetime
 import pandas as pd
 
@@ -45,24 +46,24 @@ async def login_user(user: UserAction, db: Session = Depends(get_db)):
 
 
 # 3. Lecture Status Check Endpoint
-@app.get("/lecture/status/{lecture_id}", response_model=LectureStatusResponse)
-async def lecture_status(lecture_id: int, db: Session = Depends(get_db)):
-    lecture = db.query(Lecture).filter(Lecture.id == lecture_id).first()
+@app.get("/lecture/status")
+async def lecture_status(title: str, db: Session = Depends(get_db)):
+    lecture = db.query(Lecture).filter(Lecture.title == title).first()
     if not lecture:
         raise HTTPException(status_code=404, detail="Lecture not found")
 
     lecture_started = lecture.start_time is not None and (lecture.end_time is None or lecture.end_time > datetime.now())
-    return LectureStatusResponse(lecture_started=lecture_started)
+    return {"status_code": status.HTTP_200_OK, "message": "Lecture started"}
 
 
 # 4. Student Check-in Endpoint
 @app.post("/lecture/checkin")
-async def checkin_student(lecture_id: int, user: UserAction, db: Session = Depends(get_db)):
-    student = db.query(User).filter(User.username == user.username, User.is_teacher == False).first()
+async def checkin_student(request: LectureAction, db: Session = Depends(get_db)):
+    student = db.query(User).filter(User.username == request.username, User.is_teacher == False).first()
     if not student:
         raise HTTPException(status_code=404, detail="Student not found")
 
-    lecture = db.query(Lecture).filter(Lecture.id == lecture_id).first()
+    lecture = db.query(Lecture).filter(Lecture.title == request.title).first()
     if not lecture:
         raise HTTPException(status_code=404, detail="Lecture not found")
 
@@ -79,20 +80,25 @@ async def checkin_student(lecture_id: int, user: UserAction, db: Session = Depen
 
 # 5. Start Lecture Endpoint
 @app.post("/lecture/start")
-async def start_lecture(lecture_id: int, user: UserAction, db: Session = Depends(get_db)):
+async def start_lecture(request: LectureAction, db: Session = Depends(get_db)):
     # Check if the user is a teacher
-    teacher = db.query(User).filter(User.username == user.username, User.is_teacher == True).first()
+    teacher = db.query(User).filter(User.username == request.username, User.is_teacher == True).first()
     if not teacher:
         raise HTTPException(status_code=403, detail="User is not a teacher")
 
-    # Check if the lecture exists and is associated with this teacher
-    lecture = db.query(Lecture).filter(Lecture.id == lecture_id, Lecture.teacher_id == teacher.id).first()
-    if not lecture:
-        raise HTTPException(status_code=404, detail="Lecture not found")
+    # Check if the lecture already exists
+    lecture = db.query(Lecture).filter(Lecture.title == request.title).first()
 
-    # Start the lecture by setting the start time
-    if lecture.start_time is not None:
+    # If the lecture does not exist, create it
+    if not lecture:
+        lecture = Lecture(title=request.title, teacher_id=teacher.id)
+        db.add(lecture)
+
+    # If the lecture has already started, throw an error
+    elif lecture.start_time is not None:
         raise HTTPException(status_code=400, detail="Lecture already started")
+
+    # Start the lecture
     lecture.start_time = datetime.now()
     db.commit()
     return {"status_code": status.HTTP_200_OK, "message": "Lecture started"}
@@ -100,14 +106,14 @@ async def start_lecture(lecture_id: int, user: UserAction, db: Session = Depends
 
 # 6. End Lecture Endpoint
 @app.post("/lecture/end")
-async def end_lecture(lecture_id: int, user: UserAction, db: Session = Depends(get_db)):
+async def end_lecture(request: LectureAction, db: Session = Depends(get_db)):
     # Check if the user is a teacher
-    teacher = db.query(User).filter(User.username == user.username, User.is_teacher == True).first()
+    teacher = db.query(User).filter(User.username == request.username, User.is_teacher == True).first()
     if not teacher:
         raise HTTPException(status_code=403, detail="User is not a teacher")
 
     # Check if the lecture exists and is associated with this teacher
-    lecture = db.query(Lecture).filter(Lecture.id == lecture_id, Lecture.teacher_id == teacher.id).first()
+    lecture = db.query(Lecture).filter(Lecture.title == request.title).first()
     if not lecture:
         raise HTTPException(status_code=404, detail="Lecture not found")
 
@@ -120,11 +126,11 @@ async def end_lecture(lecture_id: int, user: UserAction, db: Session = Depends(g
 
 
 @app.get("/report")
-async def generate_report(user: UserAction, db: Session = Depends(get_db)):
+async def generate_report(user: str, db: Session = Depends(get_db)):
     # Authenticate the user (ensure it's an admin or authorized user)
     # ...
     # Check if the user is a teacher
-    teacher = db.query(User).filter(User.username == user.username, User.is_teacher == True).first()
+    teacher = db.query(User).filter(User.username == user, User.is_teacher == True).first()
     if not teacher:
         raise HTTPException(status_code=403, detail="User is not a teacher")
 
@@ -151,7 +157,8 @@ async def generate_report(user: UserAction, db: Session = Depends(get_db)):
     df.to_excel(file_path, index=False)
 
     # Return the Excel file
-    return File(file_path)
+    return FileResponse(file_path, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        filename="attendance_report.xlsx")
 
 
 if __name__ == "__main__":
