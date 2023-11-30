@@ -1,0 +1,10 @@
+sqlalchemy
+pydantic
+fastapi[all]
+databases[aiosqlite]
+alembic
+uvicorn
+pandas
+openpyxl
+pytest
+httpx
