@@ -29,4 +29,4 @@ if you want to run in developer mode (hotreload with changing code), Then use th
 docker run --name st_mark --rm -v D:\student_mark\app:/usr/src/app -d -p 8000:8000 studentmark uvicorn main:app --host 0.0.0.0 --port 8000 --reload 
 ```
 
-where D:\student_mark\app is you absolute path to development dirrctory
+where D:\student_mark\app is you absolute path to development directory

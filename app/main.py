@@ -2,7 +2,7 @@ from fastapi import FastAPI, Depends, HTTPException, status, File
 from sqlalchemy.orm import Session
 from database import SessionLocal, engine
 from models import Base, User, Lecture, Attendance
-from schemas import UserCreate, UserAction, LectureAction
+from schemas import UserCreate, UserAction, UserResponse, LectureAction
 from fastapi.responses import FileResponse
 from datetime import datetime
 import pandas as pd
@@ -37,12 +37,18 @@ async def register_user(user: UserCreate, db: Session = Depends(get_db)):
 
 
 # 2. Login Endpoint
-@app.post("/login")
+@app.post("/login", response_model=UserResponse, status_code=status.HTTP_200_OK)
 async def login_user(user: UserAction, db: Session = Depends(get_db)):
     db_user = db.query(User).filter(User.username == user.username).first()
     if not db_user:
         raise HTTPException(status_code=404, detail="User not found")
-    return {"status_code": status.HTTP_200_OK, "message": "Login successful"}
+
+    user_data = UserResponse(
+        username=db_user.username,
+        full_name=db_user.full_name,
+        is_teacher=db_user.is_teacher
+    )
+    return user_data
 
 
 # 3. Lecture Status Check Endpoint
