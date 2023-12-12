@@ -1,3 +1,4 @@
+import math
 from fastapi import FastAPI, Depends, HTTPException, status, File
 from sqlalchemy.orm import Session
 from database import SessionLocal, engine
@@ -62,6 +63,22 @@ async def lecture_status(title: str, db: Session = Depends(get_db)):
     return {"status_code": status.HTTP_200_OK, "message": "Lecture started"}
 
 
+def calculate_distance(lat1, lon1, lat2, lon2):
+    # Radius of the Earth in meters
+    R = 6371000
+    phi1 = math.radians(lat1)
+    phi2 = math.radians(lat2)
+    delta_phi = math.radians(lat2 - lat1)
+    delta_lambda = math.radians(lon2 - lon1)
+
+    a = math.sin(delta_phi / 2.0) ** 2 + \
+        math.cos(phi1) * math.cos(phi2) * \
+        math.sin(delta_lambda / 2.0) ** 2
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
+    return R * c
+
+
 # 4. Student Check-in Endpoint
 @app.post("/lecture/checkin")
 async def checkin_student(request: LectureAction, db: Session = Depends(get_db)):
@@ -72,6 +89,15 @@ async def checkin_student(request: LectureAction, db: Session = Depends(get_db))
     lecture = db.query(Lecture).filter(Lecture.title == request.title).first()
     if not lecture:
         raise HTTPException(status_code=404, detail="Lecture not found")
+
+    teacher_lat = lecture.latitude
+    teacher_lng = lecture.longitude
+
+    distance = calculate_distance(request.lat, request.lng, teacher_lat, teacher_lng)
+
+    # Check if the student is within 300 meters of the teacher
+    if distance > 300:
+        raise HTTPException(status_code=400, detail="Student is not within the required proximity to the teacher")
 
     # Check if the lecture is currently ongoing
     if lecture.start_time is None or (lecture.end_time is not None and lecture.end_time < datetime.now()):
@@ -104,8 +130,10 @@ async def start_lecture(request: LectureAction, db: Session = Depends(get_db)):
     elif lecture.start_time is not None:
         raise HTTPException(status_code=400, detail="Lecture already started")
 
-    # Start the lecture
+    # Start the lecture and set location
     lecture.start_time = datetime.now()
+    lecture.latitude = request.lat  # Set latitude
+    lecture.longitude = request.lng  # Set longitude
     db.commit()
     return {"status_code": status.HTTP_200_OK, "message": "Lecture started"}
 

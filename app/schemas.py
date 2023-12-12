@@ -18,5 +18,9 @@ class UserAction(BaseModel):
 
 
 class LectureAction(BaseModel):
-    title: str
     username: str
+    title: str
+    lat: float  # Latitude
+    lng: float  # Longitude
+
+

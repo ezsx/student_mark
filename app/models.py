@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, String, Boolean, Float, DateTime, ForeignKey
 from sqlalchemy.orm import relationship
 from database import Base  # Base is the declarative base from SQLAlchemy
 
@@ -23,6 +23,8 @@ class Lecture(Base):
     teacher_id = Column(Integer, ForeignKey('users.id'))
     start_time = Column(DateTime)
     end_time = Column(DateTime, nullable=True)
+    latitude = Column(Float)  # latitude column
+    longitude = Column(Float)  # longitude column
 
     teacher = relationship("User", back_populates="lectures")
     attendances = relationship("Attendance", back_populates="lecture")
