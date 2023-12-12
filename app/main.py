@@ -3,7 +3,7 @@ from fastapi import FastAPI, Depends, HTTPException, status, File
 from sqlalchemy.orm import Session
 from database import SessionLocal, engine
 from models import Base, User, Lecture, Attendance
-from schemas import UserCreate, UserAction, UserResponse, LectureAction
+from schemas import UserCreate, UserAction, UserResponse, LectureAction, LectureTitleRequest
 from fastapi.responses import FileResponse
 from datetime import datetime
 import pandas as pd
@@ -125,10 +125,12 @@ async def start_lecture(request: LectureAction, db: Session = Depends(get_db)):
     if not lecture:
         lecture = Lecture(title=request.title, teacher_id=teacher.id)
         db.add(lecture)
-
-    # If the lecture has already started, throw an error
-    elif lecture.start_time is not None:
-        raise HTTPException(status_code=400, detail="Lecture already started")
+    else:
+        # Update the existing lecture's start time and reset the end time
+        lecture.start_time = datetime.now()
+        lecture.end_time = None  # Reset end time
+        lecture.latitude = request.lat  # Update latitude
+        lecture.longitude = request.lng  # Update longitude
 
     # Start the lecture and set location
     lecture.start_time = datetime.now()
@@ -157,6 +159,20 @@ async def end_lecture(request: LectureAction, db: Session = Depends(get_db)):
     lecture.end_time = datetime.now()
     db.commit()
     return {"status_code": status.HTTP_200_OK, "message": "Lecture ended"}
+
+
+@app.post("/lecture/has_started")
+async def check_lecture_status(request: LectureTitleRequest, db: Session = Depends(get_db)):
+    # Query the lecture from the database
+    lecture = db.query(Lecture).filter(Lecture.title == request.title).first()
+    if not lecture:
+        raise HTTPException(status_code=404, detail="Lecture not found")
+
+    # Check if the lecture has started
+    lecture_started = lecture.start_time is not None and (lecture.end_time is None or lecture.end_time > datetime.now())
+
+    return {"status_code": status.HTTP_200_OK,
+            "message": "Lecture has started" if lecture_started else "Lecture has not started"}
 
 
 @app.get("/report")

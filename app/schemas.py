@@ -24,3 +24,5 @@ class LectureAction(BaseModel):
     lng: float  # Longitude
 
 
+class LectureTitleRequest(BaseModel):
+    title: str
