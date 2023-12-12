@@ -90,6 +90,12 @@ async def checkin_student(request: LectureAction, db: Session = Depends(get_db))
     if not lecture:
         raise HTTPException(status_code=404, detail="Lecture not found")
 
+    # Check if student is already checked in
+    existing_attendance = db.query(Attendance).filter(Attendance.student_id == student.id,
+                                                          Attendance.lecture_id == lecture.id).first()
+    if existing_attendance:
+        raise HTTPException(status_code=400, detail="Student has already checked in")
+
     teacher_lat = lecture.latitude
     teacher_lng = lecture.longitude
 
@@ -102,6 +108,8 @@ async def checkin_student(request: LectureAction, db: Session = Depends(get_db))
     # Check if the lecture is currently ongoing
     if lecture.start_time is None or (lecture.end_time is not None and lecture.end_time < datetime.now()):
         raise HTTPException(status_code=400, detail="Lecture is not active")
+
+
 
     # Register attendance
     attendance = Attendance(student_id=student.id, lecture_id=lecture.id, checkin_time=datetime.now())
@@ -161,6 +169,7 @@ async def end_lecture(request: LectureAction, db: Session = Depends(get_db)):
     return {"status_code": status.HTTP_200_OK, "message": "Lecture ended"}
 
 
+# 7. has_started
 @app.post("/lecture/has_started")
 async def check_lecture_status(request: LectureTitleRequest, db: Session = Depends(get_db)):
     # Query the lecture from the database
@@ -175,6 +184,7 @@ async def check_lecture_status(request: LectureTitleRequest, db: Session = Depen
             "message": "Lecture has started" if lecture_started else "Lecture has not started"}
 
 
+# 8. make report endpoint
 @app.get("/report")
 async def generate_report(user: str, db: Session = Depends(get_db)):
     # Authenticate the user (ensure it's an admin or authorized user)
@@ -195,7 +205,7 @@ async def generate_report(user: str, db: Session = Depends(get_db)):
             report_data.append({
                 "Lecture ID": lecture.id,
                 "Lecture Title": lecture.title,
-                "Student Username": student.username,
+                "Student full name": student.full_name,
                 "Check-in Time": attendance.checkin_time
             })
 
